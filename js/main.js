@@ -1,184 +1,319 @@
-import { searchRecipes, getRecipeById } from "./api.js";
-import { createRecipeCard, createRecipeDetails } from "./recipes.js";
+import {
+  searchRecipes,
+  getRecipeById,
+  getCategories,
+  getRecipesByCategory,
+} from "./api.js";
 
-const recipeGrid = document.querySelector("#recipe-grid");
-const statusMessage = document.querySelector("#status-message");
+import {
+  createRecipeCard,
+  createRecipeDetails,
+  getFavorites,
+  isFavorite,
+} from "./recipes.js";
+
 const searchForm = document.querySelector("#search-form");
 const searchInput = document.querySelector("#search-input");
 const resultsTitle = document.querySelector("#results-title");
+const statusMessage = document.querySelector("#status-message");
+const recipeGrid = document.querySelector("#recipe-grid");
 
-const detailsSection = document.querySelector("#recipe-details");
+const recipeDetails = document.querySelector("#recipe-details");
 const detailsContent = document.querySelector("#details-content");
 const closeDetailsButton = document.querySelector("#close-details");
 
+const categoryContainer = document.querySelector("#category-container");
 
-/**
- * Display a status message.
- * @param {string} message
- */
 function showStatus(message) {
-  statusMessage.textContent = message;
-  statusMessage.classList.remove("hidden");
+  if (statusMessage) {
+    statusMessage.textContent = message;
+    statusMessage.classList.remove("hidden");
+  }
 }
 
-
-/**
- * Hide the status message.
- */
 function hideStatus() {
-  statusMessage.classList.add("hidden");
+  if (statusMessage) {
+    statusMessage.textContent = "";
+    statusMessage.classList.add("hidden");
+  }
 }
 
-
-/**
- * Display recipes in the recipe grid.
- * @param {Array} recipes
- */
 function displayRecipes(recipes) {
-  recipeGrid.innerHTML = "";
+  if (!recipeGrid) return;
 
-  if (!recipes.length) {
-    showStatus("No recipes found. Try searching for something else.");
+  if (!recipes || recipes.length === 0) {
+    recipeGrid.innerHTML = "";
+    showStatus("No recipes found. Try another search.");
     return;
   }
 
   hideStatus();
 
-  recipes.forEach((recipe) => {
-    const card = createRecipeCard(recipe);
-    recipeGrid.appendChild(card);
-  });
+  recipeGrid.innerHTML = recipes
+    .map((recipe) => createRecipeCard(recipe))
+    .join("");
 }
 
-
-/**
- * Load recipes from the API.
- * @param {string} searchTerm
- */
-async function loadRecipes(searchTerm = "") {
+async function loadRecipes(searchTerm = "chicken") {
   showStatus("Loading recipes...");
-  recipeGrid.innerHTML = "";
 
   try {
     const recipes = await searchRecipes(searchTerm);
 
-    displayRecipes(recipes);
-
-    if (searchTerm) {
-      resultsTitle.textContent = `Results for "${searchTerm}"`;
-    } else {
-      resultsTitle.textContent = "Popular Recipes";
+    if (resultsTitle) {
+      resultsTitle.textContent = searchTerm
+        ? `Results for "${searchTerm}"`
+        : "Popular Recipes";
     }
-  } catch (error) {
-    console.error(error);
 
+    displayRecipes(recipes);
+  } catch (error) {
+    console.error("Error loading recipes:", error);
     showStatus(
-      "Sorry, we couldn't load the recipes. Please check your internet connection and try again."
+      "Sorry, we couldn't load the recipes. Please check your connection and try again."
     );
   }
 }
 
-
-/**
- * Open the recipe details modal.
- * @param {string} recipeId
- */
 async function openRecipeDetails(recipeId) {
-  detailsContent.innerHTML = "<p>Loading recipe...</p>";
-
-  detailsSection.classList.remove("hidden");
-  detailsSection.setAttribute("aria-hidden", "false");
-
-  document.body.style.overflow = "hidden";
-
   try {
+    if (detailsContent) {
+      detailsContent.innerHTML = "<p>Loading recipe...</p>";
+    }
+
+    if (recipeDetails) {
+      recipeDetails.classList.add("open");
+    }
+
     const recipe = await getRecipeById(recipeId);
 
     if (!recipe) {
-      detailsContent.innerHTML = `
-        <p>Sorry, this recipe could not be found.</p>
-      `;
-
+      detailsContent.innerHTML = "<p>Recipe not found.</p>";
       return;
     }
 
     detailsContent.innerHTML = createRecipeDetails(recipe);
   } catch (error) {
-    console.error(error);
+    console.error("Error loading recipe details:", error);
 
-    detailsContent.innerHTML = `
-      <p>Sorry, we couldn't load this recipe. Please try again.</p>
-    `;
+    if (detailsContent) {
+      detailsContent.innerHTML =
+        "<p>Unable to load this recipe. Please try again.</p>";
+    }
   }
 }
 
-
-/**
- * Close recipe details.
- */
 function closeRecipeDetails() {
-  detailsSection.classList.add("hidden");
-  detailsSection.setAttribute("aria-hidden", "true");
-
-  document.body.style.overflow = "";
+  if (recipeDetails) {
+    recipeDetails.classList.remove("open");
+  }
 }
 
+function saveFavorite(recipe) {
+  const favorites = getFavorites();
 
-/**
- * Handle recipe card clicks.
- */
-recipeGrid.addEventListener("click", (event) => {
-  const button = event.target.closest(".view-recipe");
+  const alreadyFavorite = favorites.some(
+    (favorite) => favorite.idMeal === recipe.idMeal
+  );
 
-  if (!button) {
+  if (!alreadyFavorite) {
+    favorites.push(recipe);
+    localStorage.setItem("favoriteRecipes", JSON.stringify(favorites));
+  }
+}
+
+function removeFavorite(recipeId) {
+  const favorites = getFavorites();
+
+  const updatedFavorites = favorites.filter(
+    (recipe) => recipe.idMeal !== recipeId
+  );
+
+  localStorage.setItem("favoriteRecipes", JSON.stringify(updatedFavorites));
+}
+
+async function toggleFavorite(recipeId) {
+  try {
+    const favorite = isFavorite(recipeId);
+
+    if (favorite) {
+      removeFavorite(recipeId);
+    } else {
+      const recipe = await getRecipeById(recipeId);
+
+      if (recipe) {
+        saveFavorite(recipe);
+      }
+    }
+
+    refreshFavoriteButtons(recipeId);
+
+    if (recipeDetails?.classList.contains("open")) {
+      const recipe = await getRecipeById(recipeId);
+
+      if (recipe) {
+        detailsContent.innerHTML = createRecipeDetails(recipe);
+      }
+    }
+  } catch (error) {
+    console.error("Error updating favorite:", error);
+  }
+}
+
+function refreshFavoriteButtons(recipeId) {
+  const favorite = isFavorite(recipeId);
+
+  const buttons = document.querySelectorAll(
+    `[data-favorite-id="${recipeId}"]`
+  );
+
+  buttons.forEach((button) => {
+    button.classList.toggle("is-favorite", favorite);
+
+    button.textContent = favorite ? "♥" : "♡";
+
+    button.setAttribute(
+      "aria-label",
+      favorite ? "Remove from favorites" : "Add to favorites"
+    );
+
+    button.setAttribute(
+      "title",
+      favorite ? "Remove from favorites" : "Add to favorites"
+    );
+  });
+}
+
+async function loadCategories() {
+  if (!categoryContainer) return;
+
+  try {
+    const categories = await getCategories();
+
+    categoryContainer.innerHTML = `
+      <button
+        class="category-button active"
+        data-category="all"
+        type="button"
+      >
+        All
+      </button>
+    `;
+
+    categories.forEach((category) => {
+      categoryContainer.insertAdjacentHTML(
+        "beforeend",
+        `
+          <button
+            class="category-button"
+            data-category="${category.strCategory}"
+            type="button"
+          >
+            ${category.strCategory}
+          </button>
+        `
+      );
+    });
+  } catch (error) {
+    console.error("Error loading categories:", error);
+  }
+}
+
+async function loadCategory(category) {
+  if (category === "all") {
+    await loadRecipes();
     return;
   }
 
-  const recipeId = button.dataset.recipeId;
+  showStatus("Loading recipes...");
 
-  openRecipeDetails(recipeId);
-});
+  try {
+    const recipes = await getRecipesByCategory(category);
 
+    if (resultsTitle) {
+      resultsTitle.textContent = `${category} Recipes`;
+    }
 
-/**
- * Handle recipe search.
- */
-searchForm.addEventListener("submit", (event) => {
+    displayRecipes(recipes);
+  } catch (error) {
+    console.error("Error loading category:", error);
+    showStatus("Unable to load this category.");
+  }
+}
+
+searchForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const searchTerm = searchInput.value.trim();
 
-  loadRecipes(searchTerm);
+  if (!searchTerm) {
+    await loadRecipes();
+    return;
+  }
+
+  await loadRecipes(searchTerm);
 });
 
+recipeGrid?.addEventListener("click", async (event) => {
+  const favoriteButton = event.target.closest(".favorite-button");
 
-/**
- * Close details with the close button.
- */
-closeDetailsButton.addEventListener("click", closeRecipeDetails);
+  if (favoriteButton) {
+    event.stopPropagation();
 
+    const recipeId = favoriteButton.dataset.favoriteId;
 
-/**
- * Close details when clicking the dark background.
- */
-detailsSection.addEventListener("click", (event) => {
-  if (event.target === detailsSection) {
+    await toggleFavorite(recipeId);
+    return;
+  }
+
+  const recipeButton = event.target.closest(".view-recipe");
+
+  if (recipeButton) {
+    const recipeId = recipeButton.dataset.id;
+
+    await openRecipeDetails(recipeId);
+  }
+});
+
+categoryContainer?.addEventListener("click", async (event) => {
+  const categoryButton = event.target.closest(".category-button");
+
+  if (!categoryButton) return;
+
+  document.querySelectorAll(".category-button").forEach((button) => {
+    button.classList.remove("active");
+  });
+
+  categoryButton.classList.add("active");
+
+  const category = categoryButton.dataset.category;
+
+  await loadCategory(category);
+});
+
+detailsContent?.addEventListener("click", async (event) => {
+  const favoriteButton = event.target.closest(".favorite-button");
+
+  if (!favoriteButton) return;
+
+  const recipeId = favoriteButton.dataset.favoriteId;
+
+  await toggleFavorite(recipeId);
+});
+
+closeDetailsButton?.addEventListener("click", closeRecipeDetails);
+
+recipeDetails?.addEventListener("click", (event) => {
+  if (event.target === recipeDetails) {
     closeRecipeDetails();
   }
 });
 
-
-/**
- * Close details with the Escape key.
- */
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeRecipeDetails();
   }
 });
 
-
-/**
- * Initial page load.
- */
+loadCategories();
 loadRecipes();

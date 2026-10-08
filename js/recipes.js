@@ -1,79 +1,113 @@
-/**
- * Create a recipe card.
- * @param {Object} recipe
- * @returns {HTMLElement}
- */
-export function createRecipeCard(recipe) {
-  const article = document.createElement("article");
-
-  article.className = "recipe-card";
-
-  article.innerHTML = `
-    <img
-      class="recipe-card-image"
-      src="${recipe.strMealThumb}"
-      alt="${recipe.strMeal}"
-      loading="lazy"
-    >
-
-    <div class="recipe-card-content">
-      <p class="recipe-category">
-        ${recipe.strCategory || "Recipe"}
-      </p>
-
-      <h3>${recipe.strMeal}</h3>
-
-      <button
-        type="button"
-        class="view-recipe"
-        data-recipe-id="${recipe.idMeal}"
-      >
-        View Recipe
-      </button>
-    </div>
-  `;
-
-  return article;
+function getFavorites() {
+  try {
+    return JSON.parse(localStorage.getItem("favoriteRecipes")) || [];
+  } catch (error) {
+    console.error("Could not read favorites:", error);
+    return [];
+  }
 }
 
+function isFavorite(recipeId) {
+  const favorites = getFavorites();
+  return favorites.some((recipe) => recipe.idMeal === recipeId);
+}
 
-/**
- * Create the full recipe details view.
- * @param {Object} recipe
- * @returns {string}
- */
-export function createRecipeDetails(recipe) {
-  const ingredients = getIngredients(recipe);
-
-  const ingredientsHtml = ingredients
-    .map(
-      (ingredient) =>
-        `<li>${ingredient.measure} ${ingredient.name}</li>`
-    )
-    .join("");
+function createRecipeCard(recipe) {
+  const favorite = isFavorite(recipe.idMeal);
 
   return `
-    <div class="details-layout">
-      <div>
+    <article class="recipe-card">
+      <div class="recipe-image-wrapper">
         <img
-          class="details-image"
           src="${recipe.strMealThumb}"
           alt="${recipe.strMeal}"
+          class="recipe-image"
+          loading="lazy"
+        />
+
+        <button
+          class="favorite-button ${favorite ? "is-favorite" : ""}"
+          data-favorite-id="${recipe.idMeal}"
+          type="button"
+          aria-label="${favorite ? "Remove from favorites" : "Add to favorites"}"
+          title="${favorite ? "Remove from favorites" : "Add to favorites"}"
         >
+          ${favorite ? "♥" : "♡"}
+        </button>
       </div>
 
-      <div class="details-content">
-        <p class="details-category">
+      <div class="recipe-card-content">
+        <p class="recipe-category">
           ${recipe.strCategory || "Recipe"}
-          ${recipe.strArea ? ` • ${recipe.strArea}` : ""}
         </p>
 
-        <h2>${recipe.strMeal}</h2>
+        <h3>${recipe.strMeal}</h3>
+
+        <button
+          class="view-recipe"
+          data-id="${recipe.idMeal}"
+          type="button"
+        >
+          View Recipe
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function createRecipeDetails(recipe) {
+  const ingredients = getIngredients(recipe);
+  const favorite = isFavorite(recipe.idMeal);
+
+  return `
+    <div class="recipe-details-inner">
+      <img
+        src="${recipe.strMealThumb}"
+        alt="${recipe.strMeal}"
+        class="details-image"
+      />
+
+      <div class="details-content">
+        <div class="details-heading">
+          <div>
+            <p class="recipe-category">
+              ${recipe.strCategory || "Recipe"}
+              ${recipe.strArea ? ` • ${recipe.strArea}` : ""}
+            </p>
+
+            <h2>${recipe.strMeal}</h2>
+          </div>
+
+          <button
+            class="favorite-button details-favorite ${
+              favorite ? "is-favorite" : ""
+            }"
+            data-favorite-id="${recipe.idMeal}"
+            type="button"
+            aria-label="${
+              favorite ? "Remove from favorites" : "Add to favorites"
+            }"
+            title="${
+              favorite ? "Remove from favorites" : "Add to favorites"
+            }"
+          >
+            ${favorite ? "♥" : "♡"}
+          </button>
+        </div>
 
         <h3>Ingredients</h3>
 
         <ul class="ingredients-list">
-          ${ingredientsHtml}
+          ${ingredients
+            .map(
+              (ingredient) => `
+                <li>
+                  <strong>${ingredient.measure}</strong>
+                  ${ingredient.name}
+                </li>
+              `
+            )
+            .join("")}
         </ul>
 
         <h3>Instructions</h3>
@@ -86,27 +120,27 @@ export function createRecipeDetails(recipe) {
   `;
 }
 
-
-/**
- * Extract ingredient and measurement pairs.
- * TheMealDB stores ingredients in fields 1-20.
- * @param {Object} recipe
- * @returns {Array}
- */
 function getIngredients(recipe) {
   const ingredients = [];
 
-  for (let index = 1; index <= 20; index += 1) {
-    const ingredient = recipe[`strIngredient${index}`];
-    const measure = recipe[`strMeasure${index}`];
+  for (let i = 1; i <= 20; i++) {
+    const name = recipe[`strIngredient${i}`];
+    const measure = recipe[`strMeasure${i}`];
 
-    if (ingredient && ingredient.trim()) {
+    if (name && name.trim()) {
       ingredients.push({
-        name: ingredient.trim(),
-        measure: measure ? measure.trim() : ""
+        name: name.trim(),
+        measure: measure ? measure.trim() : "",
       });
     }
   }
 
   return ingredients;
 }
+
+export {
+  createRecipeCard,
+  createRecipeDetails,
+  getFavorites,
+  isFavorite,
+};
