@@ -69,6 +69,7 @@ async function loadRecipes(searchTerm = "chicken") {
     displayRecipes(recipes);
   } catch (error) {
     console.error("Error loading recipes:", error);
+
     showStatus(
       "Sorry, we couldn't load the recipes. Please check your connection and try again."
     );
@@ -77,13 +78,10 @@ async function loadRecipes(searchTerm = "chicken") {
 
 async function openRecipeDetails(recipeId) {
   try {
-    if (detailsContent) {
-      detailsContent.innerHTML = "<p>Loading recipe...</p>";
-    }
+    if (!recipeDetails || !detailsContent) return;
 
-    if (recipeDetails) {
-      recipeDetails.classList.add("open");
-    }
+    detailsContent.innerHTML = "<p>Loading recipe...</p>";
+    recipeDetails.classList.add("open");
 
     const recipe = await getRecipeById(recipeId);
 
@@ -118,7 +116,11 @@ function saveFavorite(recipe) {
 
   if (!alreadyFavorite) {
     favorites.push(recipe);
-    localStorage.setItem("favoriteRecipes", JSON.stringify(favorites));
+
+    localStorage.setItem(
+      "favoriteRecipes",
+      JSON.stringify(favorites)
+    );
   }
 }
 
@@ -129,7 +131,10 @@ function removeFavorite(recipeId) {
     (recipe) => recipe.idMeal !== recipeId
   );
 
-  localStorage.setItem("favoriteRecipes", JSON.stringify(updatedFavorites));
+  localStorage.setItem(
+    "favoriteRecipes",
+    JSON.stringify(updatedFavorites)
+  );
 }
 
 async function toggleFavorite(recipeId) {
@@ -151,7 +156,7 @@ async function toggleFavorite(recipeId) {
     if (recipeDetails?.classList.contains("open")) {
       const recipe = await getRecipeById(recipeId);
 
-      if (recipe) {
+      if (recipe && detailsContent) {
         detailsContent.innerHTML = createRecipeDetails(recipe);
       }
     }
@@ -174,12 +179,16 @@ function refreshFavoriteButtons(recipeId) {
 
     button.setAttribute(
       "aria-label",
-      favorite ? "Remove from favorites" : "Add to favorites"
+      favorite
+        ? "Remove from favorites"
+        : "Add to favorites"
     );
 
     button.setAttribute(
       "title",
-      favorite ? "Remove from favorites" : "Add to favorites"
+      favorite
+        ? "Remove from favorites"
+        : "Add to favorites"
     );
   });
 }
@@ -237,6 +246,7 @@ async function loadCategory(category) {
     displayRecipes(recipes);
   } catch (error) {
     console.error("Error loading category:", error);
+
     showStatus("Unable to load this category.");
   }
 }
@@ -301,7 +311,10 @@ detailsContent?.addEventListener("click", async (event) => {
   await toggleFavorite(recipeId);
 });
 
-closeDetailsButton?.addEventListener("click", closeRecipeDetails);
+closeDetailsButton?.addEventListener(
+  "click",
+  closeRecipeDetails
+);
 
 recipeDetails?.addEventListener("click", (event) => {
   if (event.target === recipeDetails) {
@@ -315,5 +328,25 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-loadCategories();
-loadRecipes();
+async function openRecipeFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const recipeId = params.get("recipe");
+
+  if (!recipeId) return;
+
+  await openRecipeDetails(recipeId);
+
+  window.history.replaceState(
+    {},
+    document.title,
+    window.location.pathname
+  );
+}
+
+async function initializeApp() {
+  await loadCategories();
+  await loadRecipes();
+  await openRecipeFromUrl();
+}
+
+initializeApp();
